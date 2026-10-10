@@ -4,6 +4,7 @@ namespace Crawler
 {
     internal class MyCrawler
     {
+        internal record Book(string Title, string Price, string Url);
 
         private static readonly HttpClient SharedClient = new()
         {
@@ -11,6 +12,8 @@ namespace Crawler
         };
         static async Task Main(string[] args)
         {
+            Console.OutputEncoding = System.Text.Encoding.UTF8;
+
             var response = await SharedClient.GetAsync("");
             response.EnsureSuccessStatusCode();
 
@@ -19,24 +22,34 @@ namespace Crawler
             Console.WriteLine(response.StatusCode.ToString() + "\n");
 
             //Check numbers of characters being returned from html
-            Console.WriteLine(html.Length);
+            //Console.WriteLine(html.Length);
             //first 300 characters returned
-            Console.WriteLine(html.Substring(0, Math.Min(300, html.Length)));
+            //Console.WriteLine(html.Substring(0, Math.Min(300, html.Length)));
 
             //Parse HTML
             using var context = BrowsingContext.New(Configuration.Default);
             using var doc = await context.OpenAsync(req => req.Content(html));
+            var baseuri = SharedClient.BaseAddress!;
+            var results = new List<Book>();
 
-            Console.WriteLine(doc.Title);
-            var books = doc.QuerySelectorAll("article.product_pod");
-            Console.WriteLine($"Book on page {books.Length}");
+            foreach (var book in doc.QuerySelectorAll("article.product_pod"))
+            {
+                var link = book.QuerySelector("h3 a");
+                string title = link?.GetAttribute("title") ?? "";
+                string price = book.QuerySelector("p.price_color") ?. TextContent ?? "";
 
-            var firstLink = doc.QuerySelector("article.product_pod h3 a");
-            Console.WriteLine($"first book: {firstLink?.GetAttribute("title")}");
+                string relative = link?.GetAttribute("href") ?? "";
 
-            var bookPrice = doc.QuerySelector("article.product_pod p.price_color");
-            
-            Console.WriteLine($"Book price: {bookPrice?.TextContent}");
+                string url = new Uri(baseuri,relative).ToString();
+                results.Add(new Book(title,price,url));
+
+            }
+
+            Console.WriteLine($"Books found: {results.Count}");
+            foreach (var b in results)
+            {
+                Console.WriteLine($"{b.Title} - {b.Price} - {b.Url} \n");
+            }
         }
         
     }
